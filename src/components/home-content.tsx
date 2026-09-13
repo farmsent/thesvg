@@ -38,6 +38,7 @@ export function HomeContent({ categoryCounts, count, recentIcons, collections, d
   const sidebarOpen = useSidebarStore((s) => s.open);
   const setSidebarOpen = useSidebarStore((s) => s.setOpen);
   const favorites = useFavoritesStore((s) => s.favorites);
+  // const addFavorites = useFavoritesStore((s) => s.addFavorites);
   const globalQuery = useSearchStore((s) => s.query);
   const setGlobalQuery = useSearchStore((s) => s.setQuery);
 
@@ -199,11 +200,13 @@ export function HomeContent({ categoryCounts, count, recentIcons, collections, d
   const searchBase = useMemo(() => {
     let r = collectionIcons ?? [];
     if (favoritesParam) {
-      r = r.filter((icon) => favorites.includes(icon.slug));
+      const favoritesSet = new Set(favorites);
+      r = r.filter((icon) => favoritesSet.has(icon.slug));
     }
     if (categoryParam) {
+      const lowerCatParam = categoryParam.toLowerCase();
       r = r.filter((icon) =>
-        icon.categories.some((c) => c.toLowerCase() === categoryParam.toLowerCase())
+        icon.categories.some((c) => c.toLowerCase() === lowerCatParam)
       );
     }
     return r;

@@ -5,7 +5,6 @@ import {
   Blocks,
   Bot,
   ChevronRight,
-  Cloud,
   Code,
   Code2,
   Eye,
@@ -18,11 +17,13 @@ import {
   Shapes,
   Sparkles,
   Terminal,
+  Share,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { Collection } from "@/lib/icons";
+import { COLLECTIONS_META } from "@/lib/collections-meta";
 
 import { cn } from "@/lib/utils";
 
@@ -35,14 +36,6 @@ const EXTENSION_CATEGORIES = [
   { id: "integrations", label: "Integrations", icon: Blocks },
   { id: "frameworks", label: "Framework Components", icon: Code2 },
 ];
-
-const COLLECTION_META: Record<string, { icon: typeof Cloud; label: string; color: string }> = {
-  brands: { icon: Shapes, label: "Brand Icons", color: "text-orange-500" },
-  aws: { icon: Cloud, label: "AWS Architecture", color: "text-[#ff9900]" },
-  azure: { icon: Cloud, label: "Azure Services", color: "text-[#0078d4]" },
-  gcp: { icon: Cloud, label: "Google Cloud", color: "text-[#4285f4]" },
-  k8s: { icon: Cloud, label: "Kubernetes", color: "text-[#326CE5]" },
-};
 
 interface SidebarProps {
   categories: { name: string; count: number }[];
@@ -118,9 +111,35 @@ export function Sidebar({
           <Heart className={cn("h-4 w-4 shrink-0 transition-all duration-200 group-hover:scale-110", isFavoritesActive && "fill-red-500 text-red-500")} />
           <span className="flex-1 text-left">Favorites</span>
           {favoriteCount > 0 && (
-            <span className="rounded-full bg-red-500/10 px-1.5 font-mono text-[10px] font-semibold text-red-500 dark:bg-red-500/15">
-              {favoriteCount}
-            </span>
+            <div className="flex items-center">
+              <span className="rounded-full bg-red-500/10 px-1.5 font-mono text-[10px] font-semibold text-red-500 dark:bg-red-500/15">
+                {favoriteCount}
+              </span>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const favs = localStorage.getItem("thesvg-favorites");
+                  if (favs) {
+                    try {
+                      const parsed = JSON.parse(favs);
+                      if (parsed.state && parsed.state.favorites) {
+                        const url = new URL(window.location.href);
+                        url.searchParams.set("favorites_list", parsed.state.favorites.join(","));
+                        navigator.clipboard.writeText(url.toString());
+                        const btn = e.currentTarget;
+                        const originalHTML = btn.innerHTML;
+                        btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3 text-green-500"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+                        setTimeout(() => { btn.innerHTML = originalHTML; }, 1500);
+                      }
+                    } catch(_err) {}
+                  }
+                }}
+                title="Share Favorites"
+                className="ml-2 flex h-5 w-5 items-center justify-center rounded-md hover:bg-accent hover:text-foreground"
+              >
+                <Share className="h-3 w-3" />
+              </button>
+            </div>
           )}
         </button>
 
@@ -227,7 +246,7 @@ export function Sidebar({
                 )}
               >
                 {collections.map((col) => {
-                  const meta = COLLECTION_META[col.name];
+                  const meta = COLLECTIONS_META[col.name];
                   const Icon = meta?.icon || Shapes;
                   const isActive = selectedCollection === col.name;
                   return (

@@ -1,0 +1,129 @@
+name: Icon stats snapshot
+
+# Scheduled job that pulls aggregate icon_feedback tallies out of PostHog
+# (HogQL Query API) via src/scripts/fetch-icon-stats.ts and snapshots the result
+# to public/data/icon-stats.json, so the statically-exported site can show
+# per-icon thumbs-up/down counts without a live authenticated query from the
+# browser.
+#
+# Requires two repo secrets:
+#   - POSTHOG_PERSONAL_API_KEY: a Personal API Key with "Query Read" scope,
+#     generated at https://us.posthog.com/settings/user-api-keys. Until it's
+#     added, this workflow fails with a clear, actionable error from the
+#     script itself (see src/scripts/fetch-icon-stats.ts) and does NOT touch
+#     the existing snapshot file or push anything - failure here is inert.
+#   - GH_PAT: a fine-grained Personal Access Token scoped to this repo only,
+#     with Contents (read/write) and Pull requests (read/write) permissions.
+#     Used instead of the default GITHUB_TOKEN for checkout/push/PR-create,
+#     because GITHUB_TOKEN-authored pushes and PRs can't trigger downstream
+#     workflows (GitHub's anti-recursion rule) - without a PAT here,
+#     auto-merge-icon-stats-pr.yml would sit at "action_required" needing a
+#     human to manually approve every single run.
+#
+# Runs every 6 hours, plus workflow_dispatch for manual runs/testing. The
+# binding constraint isn't PostHog's HogQL rate limit (120/hour org-wide -
+# even hourly would use a small fraction of that); it's that any run which
+# finds a changed vote count triggers a full site rebuild/redeploy (7,400+
+# pages) through the merge -> deploy chain. That's disproportionate for what
+# is currently a low-volume feature, so this favors a slower cadence and
+# less rebuild churn over near-real-time freshness. Tighten later if real
+# vote volume grows enough that fresher data is worth more frequent rebuilds.
+#
+# Never pushes to main directly (repo policy): changes land on the
+# automated/icon-stats-refresh branch (force-pushed each run, since only the
+# latest snapshot matters) and a PR is opened once, then just updated by the
+# force-push on subsequent runs. See auto-merge-icon-stats-pr.yml for the
+# companion workflow that merges those PRs once CI is green.
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: "20"
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: icon-stats-snapshot
+  cancel-in-progress: false
+
+jobs:
+  snapshot:
+    name: Fetch and snapshot icon stats
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          # Checking out (and later pushing) with the default GITHUB_TOKEN
+          # means the resulting push/PR can't trigger downstream workflows
+          # (GitHub's anti-recursion rule for GITHUB_TOKEN-authored events) -
+          # auto-merge-icon-stats-pr.yml would sit at "action_required"
+          # forever without a human manually approving it each run. A PAT
+          # doesn't have that restriction, so pushes/PRs made with it behave
+          # like a normal contributor's and cascade normally.
+          token: ${{ secrets.GH_PAT }}
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Fetch icon stats from PostHog
+        run: pnpm exec tsx src/scripts/fetch-icon-stats.ts
+        env:
+          POSTHOG_PERSONAL_API_KEY: ${{ secrets.POSTHOG_PERSONAL_API_KEY }}
+
+      - name: Check for changes
+        id: diff
+        run: |
+          # `git diff` alone is blind to a brand-new untracked file (this
+          # snapshot didn't exist in the repo until the first successful
+          # run), so it would silently report "no change" forever. `git
+          # status --porcelain` catches both a new untracked file and a
+          # modified tracked one.
+          if [ -z "$(git status --porcelain -- public/data/icon-stats.json)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No change in public/data/icon-stats.json - nothing to snapshot this run."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push snapshot branch
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B automated/icon-stats-refresh
+          git add public/data/icon-stats.json
+          git commit -m "chore: refresh icon feedback stats snapshot"
+          git push --force origin automated/icon-stats-refresh
+
+      - name: Open PR if none exists
+        if: steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          EXISTING=$(gh pr list --head automated/icon-stats-refresh --state open --json number --jq 'length')
+          if [ "$EXISTING" = "0" ]; then
+            gh pr create \
+              --title "chore: refresh icon feedback stats snapshot" \
+              --head automated/icon-stats-refresh \
+              --base main \
+              --body "Automated snapshot of \`icon_feedback\` tallies from PostHog, written by \`src/scripts/fetch-icon-stats.ts\` on a 2-hour schedule. Auto-merges once CI passes (see \`.github/workflows/auto-merge-icon-stats-pr.yml\`). Force-pushed on every run - only the latest snapshot matters here, so this PR is reused rather than re-created."
+          else
+            echo "Open PR already exists for automated/icon-stats-refresh - force-push updated it, nothing further to do."
+          fi

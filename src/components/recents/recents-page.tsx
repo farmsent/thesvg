@@ -6,7 +6,6 @@ import { useMemo, useState, useEffect, useCallback } from "react";
 import {
   Activity,
   Check,
-  Clock,
   Copy,
   Download,
   Eye,
@@ -16,6 +15,8 @@ import {
 } from "lucide-react";
 import type { IconEntry } from "@/lib/icons";
 import { useRecentsStore } from "@/lib/stores/recents-store";
+import { StatCard } from "./stat-card";
+import { Section } from "./section";
 
 interface Props {
   allIcons: IconEntry[];
@@ -43,10 +44,10 @@ function timeAgo(ts: number): string {
   return `${months}mo`;
 }
 
-function withinWindow(ts: number, win: TimeWindow): boolean {
+function getWindowCutoff(win: TimeWindow): number | null {
   const def = WINDOWS.find((w) => w.id === win);
-  if (!def || def.ms == null) return true;
-  return Date.now() - ts <= def.ms;
+  if (!def || def.ms == null) return null;
+  return Date.now() - def.ms;
 }
 
 export function RecentsPage({ allIcons }: Props) {
@@ -77,13 +78,17 @@ export function RecentsPage({ allIcons }: Props) {
     [allIcons],
   );
 
+  // Computed once per render cycle and shared by the viewed/copied/searched
+  // memos below, so the cutoff timestamp itself is never recomputed per list.
+  const cutoff = useMemo(() => getWindowCutoff(win), [win]);
+
   const viewedIcons = useMemo(
     () =>
       viewed
         .map((v) => ({ entry: iconsBySlug.get(v.slug), ts: v.ts }))
         .filter((x): x is { entry: IconEntry; ts: number } => Boolean(x.entry))
-        .filter((x) => withinWindow(x.ts, win)),
-    [viewed, iconsBySlug, win],
+        .filter((x) => cutoff === null || x.ts >= cutoff),
+    [viewed, iconsBySlug, cutoff],
   );
 
   const copiedIcons = useMemo(
@@ -101,13 +106,13 @@ export function RecentsPage({ allIcons }: Props) {
           format: typeof copied[number]["format"];
           count: number;
         } => Boolean(x.entry))
-        .filter((x) => withinWindow(x.ts, win)),
-    [copied, iconsBySlug, win],
+        .filter((x) => cutoff === null || x.ts >= cutoff),
+    [copied, iconsBySlug, cutoff],
   );
 
   const filteredSearches = useMemo(
-    () => searched.filter((s) => withinWindow(s.ts, win)),
-    [searched, win],
+    () => searched.filter((s) => cutoff === null || s.ts >= cutoff),
+    [searched, cutoff],
   );
 
   const totalEntries =
@@ -417,71 +422,5 @@ export function RecentsPage({ allIcons }: Props) {
         </div>
       )}
     </div>
-  );
-}
-
-function StatCard({
-  icon,
-  count,
-  label,
-  active,
-}: {
-  icon: React.ReactNode;
-  count: number;
-  label: string;
-  active: boolean;
-}) {
-  return (
-    <div
-      className={`rounded-2xl border px-3 py-3 transition-colors sm:px-4 ${
-        active
-          ? "border-border/60 bg-card/70 dark:border-white/[0.1] dark:bg-white/[0.04]"
-          : "border-border/40 bg-card/30 dark:border-white/[0.06] dark:bg-white/[0.02]"
-      }`}
-    >
-      <div className="mb-1 flex items-center gap-1.5 text-muted-foreground">
-        {icon}
-        <span className="text-[10.5px] font-medium uppercase tracking-wider">
-          {label}
-        </span>
-      </div>
-      <p className="text-2xl font-bold tabular-nums text-foreground sm:text-3xl">
-        {count}
-      </p>
-    </div>
-  );
-}
-
-interface SectionProps {
-  title: string;
-  icon: React.ReactNode;
-  count: number;
-  onClear: () => void;
-  children: React.ReactNode;
-}
-
-function Section({ title, icon, count, onClear, children }: SectionProps) {
-  return (
-    <section>
-      <div className="mb-3 flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-muted/60 text-muted-foreground dark:bg-white/[0.04]">
-          {icon}
-        </span>
-        <h2 className="text-base font-semibold text-foreground">{title}</h2>
-        <span className="rounded-full bg-muted/60 px-1.5 font-mono text-[10px] text-muted-foreground dark:bg-white/[0.04]">
-          {count}
-        </span>
-        <div className="h-px flex-1 bg-border/40 dark:bg-white/[0.04]" />
-        <button
-          type="button"
-          onClick={onClear}
-          className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[11px] text-muted-foreground/60 transition-colors hover:bg-accent hover:text-foreground"
-        >
-          <Clock className="h-3 w-3" />
-          Clear
-        </button>
-      </div>
-      {children}
-    </section>
   );
 }

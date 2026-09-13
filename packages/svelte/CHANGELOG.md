@@ -1,5 +1,29 @@
 # @thesvg/svelte
 
+## 3.3.6
+
+### Patch Changes
+
+- feat: add auth-badges collection (858 icons, CC0) ([#1004](https://github.com/glincker/thesvg/issues/1004))
+
+## 3.3.5
+
+### Patch Changes
+
+- fix(icons): fix incorrect dark variant for mir icon ([#997](https://github.com/glincker/thesvg/issues/997))
+
+## 3.3.4
+
+### Patch Changes
+
+- feat: add Fennec browser icon ([#993](https://github.com/glincker/thesvg/issues/993))
+
+## 3.3.3
+
+### Patch Changes
+
+- feat: add Chunk icon and CircleCI dark/light variants ([#980](https://github.com/glincker/thesvg/issues/980))
+
 ## 3.3.2
 
 ### Patch Changes

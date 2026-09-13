@@ -1,5 +1,11 @@
 # @thesvg/cli
 
+## 0.7.3
+
+### Patch Changes
+
+- Merge remote-tracking branch 'origin/main' into farmsent/main
+
 ## 0.7.2
 
 ### Patch Changes

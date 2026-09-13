@@ -1,5 +1,11 @@
 # @thesvg/react
 
+## 3.3.7
+
+### Patch Changes
+
+- Merge remote-tracking branch 'origin/main' into farmsent/main
+
 ## 3.3.6
 
 ### Patch Changes

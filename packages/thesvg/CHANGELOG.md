@@ -1,5 +1,13 @@
 # thesvg
 
+## 3.3.7
+
+### Patch Changes
+
+- Merge remote-tracking branch 'origin/main' into farmsent/main
+- Updated dependencies []:
+  - @thesvg/icons@3.3.7
+
 ## 3.3.6
 
 ### Patch Changes
